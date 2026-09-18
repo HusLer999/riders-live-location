@@ -11,7 +11,7 @@ import com.riderslive.security.CryptoManager
 enum class RideState { CREATED, WAITING, ACTIVE, PAUSED, ENDED }
 enum class Role { PRIMARY, RIDER }
 
-class RideError(message: String) : Exception(message)
+open class RideError(message: String) : Exception(message)
 class UnauthorizedError(message: String) : RideError(message)
 
 private val VALID_TRANSITIONS: Map<RideState, Set<RideState>> = mapOf(
