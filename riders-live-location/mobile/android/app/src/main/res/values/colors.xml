@@ -1,0 +1,7 @@
+<resources>
+    <color name="rider_teal">#1B8A83</color>
+    <color name="rider_amber">#E8A23D</color>
+    <color name="rider_surface_dark">#101820</color>
+    <color name="rider_surface_light">#F5F7F6</color>
+    <color name="rider_danger">#D8544A</color>
+</resources>

@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.RidersLiveLocation" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/rider_teal</item>
+        <item name="colorSecondary">@color/rider_amber</item>
+        <item name="android:statusBarColor">@color/rider_surface_dark</item>
+    </style>
+</resources>

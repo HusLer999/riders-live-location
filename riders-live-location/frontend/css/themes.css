@@ -1,0 +1,57 @@
+/*
+  Design tokens for Rider's Live Location.
+
+  Direction: this is an instrument panel for a moving vehicle, not a
+  SaaS dashboard — legible in direct sunlight and at a glance, at
+  arm's length, while stationary before a ride. Dark theme is the
+  default (matches a motorcycle dash and preserves night vision);
+  a light theme is offered for indoor/daytime settings review.
+
+  Palette:
+    --ink        #0E1512  near-black, warm rather than blue-black
+    --panel      #16211D  card/surface background
+    --panel-2    #1F2C27  raised surface (inputs, chips)
+    --teal       #2BA79A  primary action / "connected" state
+    --amber      #E8A23D  destination / attention / secondary action
+    --danger     #E05B4F  end ride / revoke / errors
+    --paper      #F4F6F2  primary text on dark
+    --paper-dim  #9FB0AA  secondary text on dark
+*/
+
+:root {
+  --ink: #0E1512;
+  --panel: #16211D;
+  --panel-2: #1F2C27;
+  --teal: #2BA79A;
+  --teal-dim: #1B6E65;
+  --amber: #E8A23D;
+  --danger: #E05B4F;
+  --paper: #F4F6F2;
+  --paper-dim: #9FB0AA;
+  --border: #2A3A34;
+
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 14px;
+  --space-4: 20px;
+  --space-5: 32px;
+}
+
+body[data-theme="light"] {
+  --ink: #F4F6F2;
+  --panel: #FFFFFF;
+  --panel-2: #EDF1EC;
+  --paper: #142019;
+  --paper-dim: #4C5C55;
+  --border: #DCE3DE;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

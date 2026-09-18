@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Rider\'s Live Location</string>
+
+    <string name="action_create_ride">CREATE RIDE</string>
+    <string name="action_join_ride">JOIN RIDE</string>
+    <string name="action_set_destination">SET DESTINATION</string>
+    <string name="action_start_ride">START RIDE</string>
+    <string name="action_end_ride">END RIDE</string>
+    <string name="action_leave_ride">LEAVE RIDE</string>
+
+    <string name="safety_reminder">Do not operate the phone while riding.</string>
+    <string name="offline_notice">This ride works without mobile data or Wi-Fi.</string>
+</resources>

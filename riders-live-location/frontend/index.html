@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Rider's Live Location</title>
+<link rel="stylesheet" href="css/themes.css" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-theme="dark">
+
+  <!-- Top status bar: connection + battery-relevant state, always visible -->
+  <header class="status-bar">
+    <div class="status-pill" id="status-bluetooth">
+      <span class="dot" data-state="off"></span>
+      <span class="label">Bluetooth</span>
+    </div>
+    <div class="status-pill" id="status-gps">
+      <span class="dot" data-state="off"></span>
+      <span class="label">GPS</span>
+    </div>
+    <div class="status-pill" id="status-network">
+      <span class="dot" data-state="offline"></span>
+      <span class="label">Offline</span>
+    </div>
+    <div class="status-pill" id="status-riders">
+      <span class="label" id="rider-count-label">0 riders</span>
+    </div>
+  </header>
+
+  <main id="screens">
+
+    <!-- HOME -->
+    <section class="screen" id="screen-home" data-active="true">
+      <div class="hero">
+        <p class="eyebrow-free-label">No signal needed</p>
+        <h1>Ride together,<br/>off the grid.</h1>
+        <p class="hero-sub">Share live location with your group over Bluetooth. No data plan, no cloud, no account.</p>
+      </div>
+
+      <div class="action-stack">
+        <button class="btn btn-primary btn-large" id="btn-create-ride">CREATE RIDE</button>
+        <button class="btn btn-secondary btn-large" id="btn-join-ride">JOIN RIDE</button>
+      </div>
+
+      <div id="permission-banner" class="banner banner-warning hidden">
+        <p id="permission-banner-text"></p>
+        <button class="btn btn-small" id="btn-grant-permissions">Allow access</button>
+      </div>
+
+      <p class="reminder-text">Do not operate the phone while riding.</p>
+    </section>
+
+    <!-- JOIN RIDE -->
+    <section class="screen" id="screen-join" data-active="false">
+      <h2>Join a ride</h2>
+      <p class="muted">Enter the 6-digit code shared by your ride's organizer.</p>
+      <input type="text" inputmode="numeric" maxlength="6" class="code-input" id="join-code-input" placeholder="000000" />
+      <input type="text" class="text-input" id="join-name-input" placeholder="Your display name (e.g. Rider B)" />
+      <button class="btn btn-primary btn-large" id="btn-confirm-join">JOIN</button>
+      <button class="btn btn-ghost" data-nav="home">Cancel</button>
+    </section>
+
+    <!-- RIDE CODE / WAITING ROOM (primary rider) -->
+    <section class="screen" id="screen-ride-code" data-active="false">
+      <h2>Your ride code</h2>
+      <div class="code-display" id="ride-code-display">583921</div>
+      <div class="code-actions">
+        <button class="btn btn-small" id="btn-copy-code">COPY</button>
+        <button class="btn btn-small" id="btn-show-qr">SHOW QR</button>
+      </div>
+      <div id="qr-canvas-wrap" class="qr-wrap hidden">
+        <canvas id="qr-canvas" width="180" height="180"></canvas>
+        <p class="muted small">Contains only the ride code and join key — never your location.</p>
+      </div>
+      <p class="muted">Share this code with the riders joining you. Waiting for riders to join…</p>
+      <div id="waiting-room-list" class="rider-chip-row"></div>
+      <button class="btn btn-primary btn-large" id="btn-start-ride">START RIDE</button>
+    </section>
+
+    <!-- MAP -->
+    <section class="screen" id="screen-map" data-active="false">
+      <div class="map-wrap">
+        <canvas id="map-canvas"></canvas>
+        <div class="map-overlay-top">
+          <span class="map-badge" id="map-offline-badge">Offline map available</span>
+        </div>
+        <div class="map-overlay-bottom" id="destination-card">
+          <div class="dc-row">
+            <span class="dc-flag">🏁</span>
+            <div class="dc-text">
+              <strong id="destination-name">No destination set</strong>
+              <span id="destination-distance" class="muted small"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIDERS / GROUP DASHBOARD -->
+    <section class="screen" id="screen-riders" data-active="false">
+      <h2>Riders</h2>
+      <div id="riders-list" class="rider-panel-list"></div>
+    </section>
+
+    <!-- RIDE CONTROLS (primary rider tools) -->
+    <section class="screen" id="screen-ride" data-active="false">
+      <h2>Ride controls</h2>
+      <div class="control-card">
+        <h3>Destination</h3>
+        <input type="text" class="text-input" id="destination-name-input" placeholder="Destination name (e.g. Pokhara)" />
+        <div class="two-col">
+          <input type="text" class="text-input" id="destination-lat-input" placeholder="Latitude" />
+          <input type="text" class="text-input" id="destination-lon-input" placeholder="Longitude" />
+        </div>
+        <button class="btn btn-secondary" id="btn-set-destination">SET DESTINATION</button>
+      </div>
+      <div class="control-card">
+        <h3>Sharing</h3>
+        <label class="toggle-row"><span>Pause my location sharing</span><input type="checkbox" id="toggle-pause-sharing" /></label>
+      </div>
+      <button class="btn btn-danger btn-large" id="btn-end-ride">END RIDE</button>
+      <button class="btn btn-ghost btn-large hidden" id="btn-leave-ride">LEAVE RIDE</button>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="screen" id="screen-settings" data-active="false">
+      <h2>Settings</h2>
+
+      <h3 class="section-title">Privacy</h3>
+      <div class="control-card">
+        <label class="toggle-row"><span>Location sharing</span><input type="checkbox" id="pref-location-sharing" checked /></label>
+        <label class="toggle-row"><span>Save location history</span><input type="checkbox" id="pref-save-history" /></label>
+        <label class="toggle-row"><span>Share speed</span><input type="checkbox" id="pref-share-speed" checked /></label>
+        <label class="toggle-row"><span>Share heading</span><input type="checkbox" id="pref-share-heading" checked /></label>
+        <label class="toggle-row"><span>Auto-delete ride data on end</span><input type="checkbox" id="pref-auto-delete" checked /></label>
+        <div class="field-row">
+          <span>Display alias</span>
+          <input type="text" class="text-input inline" id="pref-alias" value="Rider" />
+        </div>
+        <button class="btn btn-danger" id="btn-clear-data">DELETE ALL LOCAL RIDE DATA</button>
+      </div>
+
+      <h3 class="section-title">Security</h3>
+      <div class="control-card">
+        <label class="toggle-row"><span>Require device authentication</span><input type="checkbox" id="pref-require-auth" checked disabled /></label>
+        <label class="toggle-row"><span>Auto-expire ride</span><input type="checkbox" id="pref-auto-expire" checked /></label>
+        <label class="toggle-row"><span>Rotate session keys on change</span><input type="checkbox" id="pref-rotate-keys" checked disabled /></label>
+        <label class="toggle-row"><span>Hide rider identity (use alias only)</span><input type="checkbox" id="pref-hide-identity" checked /></label>
+        <label class="toggle-row"><span>Require confirmation before joining</span><input type="checkbox" id="pref-confirm-join" checked /></label>
+        <p class="muted small">Settings shown as disabled are always-on protections that cannot be turned off.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom navigation -->
+  <nav class="bottom-nav">
+    <button class="nav-item" data-nav="home" data-active="true"><span class="nav-icon">🏠</span><span>Home</span></button>
+    <button class="nav-item" data-nav="map"><span class="nav-icon">🗺️</span><span>Map</span></button>
+    <button class="nav-item" data-nav="riders"><span class="nav-icon">👥</span><span>Riders</span></button>
+    <button class="nav-item" data-nav="ride"><span class="nav-icon">🏍️</span><span>Ride</span></button>
+    <button class="nav-item" data-nav="settings"><span class="nav-icon">⚙️</span><span>Settings</span></button>
+  </nav>
+
+  <div id="toast-container"></div>
+
+  <script src="js/bluetooth-ui.js"></script>
+  <script src="js/ride.js"></script>
+  <script src="js/riders.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/security-ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        Permission list is intentionally minimal (master prompt §41).
+        NO contacts, camera, microphone, phone, SMS, or broad storage
+        permissions — this app has no feature that needs any of them.
+    -->
+
+    <!-- Bluetooth LE: scanning + advertising + GATT client/server for the mesh -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- Location: required by the OS to perform BLE scans on API < 31,
+         and to read GPS fixes on all versions. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Needed so an active ride keeps sharing/relaying while the phone
+         is in a pocket or the screen is off — this is the ONLY reason
+         background location is requested, and it is requested only
+         while a ride is ACTIVE (see permissions/PermissionFlow.kt),
+         never at first app launch. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- Foreground service so Android does not kill the ride session
+         mid-route; FOREGROUND_SERVICE_LOCATION is required from API 34. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Declares the app requires BLE hardware; devices without it
+         cannot install from the Play Store. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+
+    <application
+        android:name=".RidersLiveApplication"
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.RidersLiveLocation"
+        android:usesCleartextTraffic="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".service.RideForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="location|connectedDevice" />
+
+    </application>
+</manifest>
