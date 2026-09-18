@@ -23,8 +23,14 @@ jobs:
 
       - name: Set up Android SDK
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          SDKMANAGER=$(find "$ANDROID_SDK_ROOT" -iname "sdkmanager" -type f 2>/dev/null | head -n 1)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "Could not locate sdkmanager under \$ANDROID_SDK_ROOT ($ANDROID_SDK_ROOT)"
+            exit 1
+          fi
+          echo "Using sdkmanager at: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Grant execute permission for gradlew
         run: |
