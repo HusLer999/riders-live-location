@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Rider's Live Location</title>
+<style>
+/*
+  Design tokens for Rider's Live Location.
+
+  Direction: this is an instrument panel for a moving vehicle, not a
+  SaaS dashboard — legible in direct sunlight and at a glance, at
+  arm's length, while stationary before a ride. Dark theme is the
+  default (matches a motorcycle dash and preserves night vision);
+  a light theme is offered for indoor/daytime settings review.
+
+  Palette:
+    --ink        #0E1512  near-black, warm rather than blue-black
+    --panel      #16211D  card/surface background
+    --panel-2    #1F2C27  raised surface (inputs, chips)
+    --teal       #2BA79A  primary action / "connected" state
+    --amber      #E8A23D  destination / attention / secondary action
+    --danger     #E05B4F  end ride / revoke / errors
+    --paper      #F4F6F2  primary text on dark
+    --paper-dim  #9FB0AA  secondary text on dark
+*/
+
+:root {
+  --ink: #0E1512;
+  --panel: #16211D;
+  --panel-2: #1F2C27;
+  --teal: #2BA79A;
+  --teal-dim: #1B6E65;
+  --amber: #E8A23D;
+  --danger: #E05B4F;
+  --paper: #F4F6F2;
+  --paper-dim: #9FB0AA;
+  --border: #2A3A34;
+
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 14px;
+  --space-4: 20px;
+  --space-5: 32px;
+}
+
+/* This app's brand is dark-by-default (an instrument panel, not a
+   document), but it still respects a viewer whose system is set to
+   light mode, unless a dark theme is explicitly forced. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --ink: #F4F6F2;
+    --panel: #FFFFFF;
+    --panel-2: #EDF1EC;
+    --paper: #142019;
+    --paper-dim: #4C5C55;
+    --border: #DCE3DE;
+  }
+}
+:root[data-theme="light"] {
+  --ink: #F4F6F2;
+  --panel: #FFFFFF;
+  --panel-2: #EDF1EC;
+  --paper: #142019;
+  --paper-dim: #4C5C55;
+  --border: #DCE3DE;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+}
+
+h1, h2, h3 { margin: 0 0 var(--space-2) 0; letter-spacing: -0.01em; }
+h1 { font-size: 30px; font-weight: 700; line-height: 1.15; }
+h2 { font-size: 20px; font-weight: 700; }
+h3 { font-size: 15px; font-weight: 600; color: var(--paper-dim); }
+p { line-height: 1.5; }
+.muted { color: var(--paper-dim); }
+.small { font-size: 12px; }
+.hidden { display: none !important; }
+
+/* -------------------------------------------------- status bar -------- */
+.status-bar {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-size: 11px;
+  color: var(--paper-dim);
+  white-space: nowrap;
+}
+.status-pill .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--danger);
+  flex-shrink: 0;
+}
+.status-pill .dot[data-state="on"],
+.status-pill .dot[data-state="connected"],
+.status-pill .dot[data-state="accurate"] { background: var(--teal); }
+.status-pill .dot[data-state="warn"] { background: var(--amber); }
+
+/* -------------------------------------------------- screens ------------ */
+#screens { flex: 1; overflow-y: auto; padding-bottom: 88px; }
+.screen { display: none; padding: var(--space-4); animation: fade-in 180ms ease-out; }
+.screen[data-active="true"] { display: block; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.screen.no-pad { padding: 0; }
+
+/* -------------------------------------------------- home ---------------*/
+.hero { padding: var(--space-4) 0 var(--space-5) 0; }
+.eyebrow-free-label { color: var(--teal); font-weight: 600; font-size: 13px; margin: 0 0 var(--space-2); }
+.hero-sub { color: var(--paper-dim); font-size: 15px; }
+.action-stack { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); }
+.reminder-text { text-align: center; color: var(--paper-dim); font-size: 12px; margin-top: var(--space-5); }
+
+/* -------------------------------------------------- buttons ------------ */
+.btn {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 13px 18px;
+  cursor: pointer;
+  transition: transform 80ms ease, opacity 120ms ease;
+}
+.btn:active { transform: scale(0.98); }
+.btn-large { width: 100%; padding: 17px; font-size: 16px; }
+.btn-small { padding: 8px 14px; font-size: 13px; border-radius: var(--radius-sm); }
+.btn-primary { background: var(--teal); color: #04211D; }
+.btn-secondary { background: var(--panel-2); color: var(--paper); border: 1px solid var(--border); }
+.btn-danger { background: var(--danger); color: #2B0A07; }
+.btn-ghost { background: transparent; color: var(--paper-dim); width: 100%; margin-top: var(--space-2); }
+
+/* -------------------------------------------------- inputs ------------- */
+.text-input, .code-input {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--paper);
+  border-radius: var(--radius-sm);
+  padding: 13px 14px;
+  font-size: 15px;
+  margin-bottom: var(--space-3);
+  font-family: inherit;
+}
+.text-input.inline { margin-bottom: 0; width: auto; flex: 1; }
+.code-input {
+  text-align: center;
+  font-size: 32px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 8px;
+  padding: 18px;
+}
+.two-col { display: flex; gap: var(--space-2); }
+.two-col .text-input { flex: 1; }
+
+/* -------------------------------------------------- ride code screen -- */
+.code-display {
+  font-size: 52px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 6px;
+  text-align: center;
+  background: var(--panel-2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin: var(--space-3) 0;
+  color: var(--amber);
+}
+.code-actions { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-3); }
+.qr-wrap { text-align: center; margin-bottom: var(--space-3); }
+.qr-wrap canvas { background: #fff; border-radius: var(--radius-sm); padding: 8px; }
+.rider-chip-row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0; min-height: 32px; }
+.rider-chip {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  display: flex; align-items: center; gap: 6px;
+}
+.rider-chip .swatch { width: 8px; height: 8px; border-radius: 50%; }
+
+/* -------------------------------------------------- map ---------------- */
+.map-wrap { position: relative; margin: calc(-1 * var(--space-4)); height: calc(100vh - 220px); min-height: 420px; }
+#map-canvas { width: 100%; height: 100%; display: block; background: #0A100D; }
+.map-overlay-top { position: absolute; top: var(--space-3); left: var(--space-3); right: var(--space-3); display: flex; justify-content: space-between; }
+.map-badge { background: rgba(22,33,29,0.9); border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px; font-size: 11px; color: var(--teal); }
+.map-overlay-bottom { position: absolute; bottom: var(--space-3); left: var(--space-3); right: var(--space-3); background: rgba(22,33,29,0.95); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); backdrop-filter: blur(6px); }
+.dc-row { display: flex; align-items: center; gap: var(--space-2); }
+.dc-flag { font-size: 22px; }
+.dc-text { display: flex; flex-direction: column; }
+
+/* -------------------------------------------------- riders panel ------- */
+.rider-panel-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.rider-panel-item {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.rider-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 15px; color: #04211D;
+  flex-shrink: 0;
+}
+.rider-info { flex: 1; min-width: 0; }
+.rider-name-row { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.rider-meta { color: var(--paper-dim); font-size: 12px; margin-top: 2px; }
+.rider-metrics { text-align: right; }
+.rider-metrics .dist { font-weight: 700; font-variant-numeric: tabular-nums; }
+.rider-metrics .eta { color: var(--paper-dim); font-size: 12px; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); flex-shrink: 0; }
+.live-dot[data-live="stale"] { background: var(--amber); }
+.live-dot[data-live="lost"] { background: var(--danger); }
+.rider-remove-btn { background: none; border: none; color: var(--danger); font-size: 12px; cursor: pointer; padding: 4px; }
+
+/* -------------------------------------------------- control cards ------ */
+.control-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.section-title { margin-top: var(--space-4); margin-bottom: var(--space-2); text-transform: none; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; font-size: 14px; border-bottom: 1px solid var(--border); }
+.toggle-row:last-of-type { border-bottom: none; }
+.toggle-row input[type="checkbox"] { width: 42px; height: 24px; accent-color: var(--teal); }
+.field-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 9px 0; font-size: 14px; }
+
+/* -------------------------------------------------- banners/toasts ----- */
+.banner { border-radius: var(--radius-md); padding: var(--space-3); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin: var(--space-3) 0; }
+.banner-warning { background: rgba(232,162,61,0.12); border: 1px solid var(--amber); color: var(--amber); }
+#toast-container { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); z-index: 50; display: flex; flex-direction: column; gap: 8px; width: calc(100% - 32px); max-width: 448px; }
+.toast { background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); animation: fade-in 150ms ease-out; }
+
+/* -------------------------------------------------- bottom nav --------- */
+.bottom-nav {
+  position: fixed;
+  bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 480px;
+  display: flex;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding: 6px 0 max(6px, env(safe-area-inset-bottom));
+}
+.nav-item {
+  flex: 1;
+  background: none; border: none; color: var(--paper-dim);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 11px; font-family: inherit; cursor: pointer; padding: 6px 0;
+}
+.nav-item[data-active="true"] { color: var(--teal); }
+.nav-icon { font-size: 19px; }
+
+@media (max-width: 360px) {
+  .code-display { font-size: 40px; letter-spacing: 3px; }
+}
+
+</style>
+</head>
+<body>
+
+  <!-- Top status bar: connection + battery-relevant state, always visible -->
+  <header class="status-bar">
+    <div class="status-pill" id="status-bluetooth">
+      <span class="dot" data-state="off"></span>
+      <span class="label">Bluetooth</span>
+    </div>
+    <div class="status-pill" id="status-gps">
+      <span class="dot" data-state="off"></span>
+      <span class="label">GPS</span>
+    </div>
+    <div class="status-pill" id="status-network">
+      <span class="dot" data-state="offline"></span>
+      <span class="label">Offline</span>
+    </div>
+    <div class="status-pill" id="status-riders">
+      <span class="label" id="rider-count-label">0 riders</span>
+    </div>
+  </header>
+
+  <main id="screens">
+
+    <!-- HOME -->
+    <section class="screen" id="screen-home" data-active="true">
+      <div class="hero">
+        <p class="eyebrow-free-label">No signal needed</p>
+        <h1>Ride together,<br/>off the grid.</h1>
+        <p class="hero-sub">Share live location with your group over Bluetooth. No data plan, no cloud, no account.</p>
+      </div>
+
+      <div class="action-stack">
+        <button class="btn btn-primary btn-large" id="btn-create-ride">CREATE RIDE</button>
+        <button class="btn btn-secondary btn-large" id="btn-join-ride">JOIN RIDE</button>
+      </div>
+
+      <div id="permission-banner" class="banner banner-warning hidden">
+        <p id="permission-banner-text"></p>
+        <button class="btn btn-small" id="btn-grant-permissions">Allow access</button>
+      </div>
+
+      <p class="reminder-text">Do not operate the phone while riding.</p>
+    </section>
+
+    <!-- JOIN RIDE -->
+    <section class="screen" id="screen-join" data-active="false">
+      <h2>Join a ride</h2>
+      <p class="muted">Enter the 6-digit code shared by your ride's organizer.</p>
+      <input type="text" inputmode="numeric" maxlength="6" class="code-input" id="join-code-input" placeholder="000000" />
+      <input type="text" class="text-input" id="join-name-input" placeholder="Your display name (e.g. Rider B)" />
+      <button class="btn btn-primary btn-large" id="btn-confirm-join">JOIN</button>
+      <button class="btn btn-ghost" data-nav="home">Cancel</button>
+    </section>
+
+    <!-- RIDE CODE / WAITING ROOM (primary rider) -->
+    <section class="screen" id="screen-ride-code" data-active="false">
+      <h2>Your ride code</h2>
+      <div class="code-display" id="ride-code-display">583921</div>
+      <div class="code-actions">
+        <button class="btn btn-small" id="btn-copy-code">COPY</button>
+        <button class="btn btn-small" id="btn-show-qr">SHOW QR</button>
+      </div>
+      <div id="qr-canvas-wrap" class="qr-wrap hidden">
+        <canvas id="qr-canvas" width="180" height="180"></canvas>
+        <p class="muted small">Contains only the ride code and join key — never your location.</p>
+      </div>
+      <p class="muted">Share this code with the riders joining you. Waiting for riders to join…</p>
+      <div id="waiting-room-list" class="rider-chip-row"></div>
+      <button class="btn btn-primary btn-large" id="btn-start-ride">START RIDE</button>
+    </section>
+
+    <!-- MAP -->
+    <section class="screen" id="screen-map" data-active="false">
+      <div class="map-wrap">
+        <canvas id="map-canvas"></canvas>
+        <div class="map-overlay-top">
+          <span class="map-badge" id="map-offline-badge">Offline map available</span>
+        </div>
+        <div class="map-overlay-bottom" id="destination-card">
+          <div class="dc-row">
+            <span class="dc-flag">🏁</span>
+            <div class="dc-text">
+              <strong id="destination-name">No destination set</strong>
+              <span id="destination-distance" class="muted small"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIDERS / GROUP DASHBOARD -->
+    <section class="screen" id="screen-riders" data-active="false">
+      <h2>Riders</h2>
+      <div id="riders-list" class="rider-panel-list"></div>
+    </section>
+
+    <!-- RIDE CONTROLS (primary rider tools) -->
+    <section class="screen" id="screen-ride" data-active="false">
+      <h2>Ride controls</h2>
+      <div class="control-card">
+        <h3>Destination</h3>
+        <input type="text" class="text-input" id="destination-name-input" placeholder="Destination name (e.g. Pokhara)" />
+        <div class="two-col">
+          <input type="text" class="text-input" id="destination-lat-input" placeholder="Latitude" />
+          <input type="text" class="text-input" id="destination-lon-input" placeholder="Longitude" />
+        </div>
+        <button class="btn btn-secondary" id="btn-set-destination">SET DESTINATION</button>
+      </div>
+      <div class="control-card">
+        <h3>Sharing</h3>
+        <label class="toggle-row"><span>Pause my location sharing</span><input type="checkbox" id="toggle-pause-sharing" /></label>
+      </div>
+      <button class="btn btn-danger btn-large" id="btn-end-ride">END RIDE</button>
+      <button class="btn btn-ghost btn-large hidden" id="btn-leave-ride">LEAVE RIDE</button>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="screen" id="screen-settings" data-active="false">
+      <h2>Settings</h2>
+
+      <h3 class="section-title">Privacy</h3>
+      <div class="control-card">
+        <label class="toggle-row"><span>Location sharing</span><input type="checkbox" id="pref-location-sharing" checked /></label>
+        <label class="toggle-row"><span>Save location history</span><input type="checkbox" id="pref-save-history" /></label>
+        <label class="toggle-row"><span>Share speed</span><input type="checkbox" id="pref-share-speed" checked /></label>
+        <label class="toggle-row"><span>Share heading</span><input type="checkbox" id="pref-share-heading" checked /></label>
+        <label class="toggle-row"><span>Auto-delete ride data on end</span><input type="checkbox" id="pref-auto-delete" checked /></label>
+        <div class="field-row">
+          <span>Display alias</span>
+          <input type="text" class="text-input inline" id="pref-alias" value="Rider" />
+        </div>
+        <button class="btn btn-danger" id="btn-clear-data">DELETE ALL LOCAL RIDE DATA</button>
+      </div>
+
+      <h3 class="section-title">Security</h3>
+      <div class="control-card">
+        <label class="toggle-row"><span>Require device authentication</span><input type="checkbox" id="pref-require-auth" checked disabled /></label>
+        <label class="toggle-row"><span>Auto-expire ride</span><input type="checkbox" id="pref-auto-expire" checked /></label>
+        <label class="toggle-row"><span>Rotate session keys on change</span><input type="checkbox" id="pref-rotate-keys" checked disabled /></label>
+        <label class="toggle-row"><span>Hide rider identity (use alias only)</span><input type="checkbox" id="pref-hide-identity" checked /></label>
+        <label class="toggle-row"><span>Require confirmation before joining</span><input type="checkbox" id="pref-confirm-join" checked /></label>
+        <p class="muted small">Settings shown as disabled are always-on protections that cannot be turned off.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom navigation -->
+  <nav class="bottom-nav">
+    <button class="nav-item" data-nav="home" data-active="true"><span class="nav-icon">🏠</span><span>Home</span></button>
+    <button class="nav-item" data-nav="map"><span class="nav-icon">🗺️</span><span>Map</span></button>
+    <button class="nav-item" data-nav="riders"><span class="nav-icon">👥</span><span>Riders</span></button>
+    <button class="nav-item" data-nav="ride"><span class="nav-icon">🏍️</span><span>Ride</span></button>
+    <button class="nav-item" data-nav="settings"><span class="nav-icon">⚙️</span><span>Settings</span></button>
+  </nav>
+
+  <div id="toast-container"></div>
+
+<script>
+
+// ---- js/bluetooth-ui.js ----
+/**
+ * bluetooth-ui.js — the ONE place that decides whether we're talking to
+ * real hardware (via window.AndroidBridge, injected by MainActivity.kt's
+ * WebView) or running as a standalone browser demo.
+ *
+ * This file never touches Bluetooth or GPS APIs directly — a WebView (and
+ * a desktop browser) has no BLE central/peripheral API to speak of, which
+ * is exactly why the master spec calls for a native bridge instead of
+ * pretending browser APIs provide unrestricted Bluetooth access.
+ *
+ * RidersLive.bridge exposes the same async-ish, event-driven interface
+ * either way: `createRide`, `joinRide`, `startRide`, `endRide`,
+ * `setDestination`, `removeParticipant`, and a subscribe(event, cb) for
+ * 'rideStateChanged' | 'destinationChanged' | 'participantRemoved' |
+ * 'riderUpdate' | 'error'.
+ */
+(function (global) {
+  const listeners = {};
+  function emit(event, detail) {
+    (listeners[event] || []).forEach((cb) => cb(detail));
+  }
+  function subscribe(event, cb) {
+    (listeners[event] = listeners[event] || []).push(cb);
+  }
+
+  const hasNativeBridge = typeof window.AndroidBridge !== "undefined";
+
+  // Native events arrive as window CustomEvents dispatched by
+  // MainActivity.notifyJs(...). Re-route them into our listener map.
+  if (hasNativeBridge) {
+    ["rideStateChanged", "destinationChanged", "participantRemoved", "error"].forEach((evt) => {
+      window.addEventListener(evt, (e) => emit(evt, e.detail));
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // NATIVE bridge: thin wrapper over window.AndroidBridge (see MainActivity.kt)
+  // ---------------------------------------------------------------------
+  const NativeBridge = {
+    mode: "native",
+    hasPermissions: () => window.AndroidBridge.hasRequiredPermissions(),
+    requestPermissions: () => window.AndroidBridge.requestPermissions(),
+    createRide: (displayName) => JSON.parse(window.AndroidBridge.createRide(displayName)),
+    startRide: () => window.AndroidBridge.startRide(),
+    endRide: () => window.AndroidBridge.endRide(),
+    setDestination: (riderId, lat, lon, name) => window.AndroidBridge.setDestination(riderId, lat, lon, name),
+    removeParticipant: (actingId, targetId) => window.AndroidBridge.removeParticipant(actingId, targetId),
+    joinRide: () => {
+      throw new Error("Joining is completed over BLE by the native layer once a ride code is entered; see BleMeshManager.kt + HandshakeManager.");
+    },
+    subscribe,
+  };
+
+  // ---------------------------------------------------------------------
+  // SIMULATED bridge: for browser-based UI development and this demo.
+  // Simulates 2-4 nearby riders moving along a route toward a shared
+  // destination, with occasional simulated connection loss, so every
+  // screen (map, dashboard, connection status) has real, changing data
+  // to render without needing physical hardware.
+  // ---------------------------------------------------------------------
+  const SIM_RIDER_NAMES = ["Rider B", "Rider C", "Rider D", "Rider E"];
+  const SIM_COLORS = ["#E8A23D", "#5AA9E6", "#C97BD1", "#7FD8A0"];
+
+  function randomRideCode() {
+    // Uses the browser CSPRNG, matching the "cryptographically secure,
+    // not Math.random()" rule from security.py, for demo fidelity.
+    const bytes = new Uint32Array(6);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes).map((b) => b % 10).join("");
+  }
+
+  const SimulatedBridge = {
+    mode: "simulated",
+    _state: null,
+    _timer: null,
+
+    hasPermissions: () => true,
+    requestPermissions: () => emit("error", { message: "(demo mode — no real permissions needed)" }),
+
+    createRide(displayName) {
+      const baseLat = 27.7172, baseLon = 85.3240; // Kathmandu, as a plausible demo start point
+      const me = { riderId: "RIDER-YOU1", displayName, lat: baseLat, lon: baseLon, speedMps: 0, headingDeg: 0, isSelf: true, lastUpdate: Date.now(), connection: "live" };
+
+      const simRiders = SIM_RIDER_NAMES.slice(0, 3).map((name, i) => ({
+        riderId: `RIDER-SIM${i}`,
+        displayName: name,
+        lat: baseLat + (Math.random() - 0.5) * 0.05,
+        lon: baseLon + (Math.random() - 0.5) * 0.05,
+        speedMps: 8 + Math.random() * 6,
+        headingDeg: Math.random() * 360,
+        isSelf: false,
+        color: SIM_COLORS[i],
+        connection: "live",
+        hopCount: i === 0 ? 0 : i, // demonstrate multi-hop relay in the UI
+        lastUpdate: Date.now(),
+      }));
+
+      this._state = {
+        rideId: "sim-" + Math.random().toString(36).slice(2),
+        code: randomRideCode(),
+        state: "CREATED",
+        me,
+        riders: simRiders,
+        destination: null,
+      };
+
+      this._startSimLoop();
+      return { rideId: this._state.rideId, code: this._state.code, riderId: me.riderId };
+    },
+
+    startRide() {
+      if (!this._state) return;
+      this._state.state = "ACTIVE";
+      emit("rideStateChanged", { state: "ACTIVE" });
+    },
+
+    endRide() {
+      if (!this._state) return;
+      this._state.state = "ENDED";
+      clearInterval(this._timer);
+      emit("rideStateChanged", { state: "ENDED" });
+      this._state = null;
+    },
+
+    setDestination(riderId, lat, lon, name) {
+      if (!this._state) return;
+      this._state.destination = { lat: parseFloat(lat), lon: parseFloat(lon), name };
+      emit("destinationChanged", { lat, lon, name });
+    },
+
+    removeParticipant(actingId, targetId) {
+      if (!this._state) return;
+      this._state.riders = this._state.riders.filter((r) => r.riderId !== targetId);
+      emit("participantRemoved", { riderId: targetId });
+    },
+
+    getState() {
+      return this._state;
+    },
+
+    _startSimLoop() {
+      clearInterval(this._timer);
+      this._timer = setInterval(() => {
+        if (!this._state) return;
+        const dest = this._state.destination;
+        [this._state.me, ...this._state.riders].forEach((r) => {
+          if (r.connection === "lost") return;
+          // Drift each rider slightly toward the destination if one is set,
+          // otherwise just wander — enough motion to make ETA/distance
+          // numbers visibly update in the demo.
+          const stepDeg = 0.0006 * (0.6 + Math.random());
+          if (dest) {
+            const dLat = dest.lat - r.lat, dLon = dest.lon - r.lon;
+            const mag = Math.hypot(dLat, dLon) || 1;
+            r.lat += (dLat / mag) * stepDeg;
+            r.lon += (dLon / mag) * stepDeg;
+          } else {
+            r.lat += (Math.random() - 0.5) * stepDeg;
+            r.lon += (Math.random() - 0.5) * stepDeg;
+          }
+          r.speedMps = r.isSelf ? 0 : 6 + Math.random() * 8;
+          r.lastUpdate = Date.now();
+        });
+
+        // Occasionally simulate a rider dropping out of direct range and
+        // being picked back up via relay, to exercise the connection UI.
+        if (Math.random() < 0.03 && this._state.riders.length > 1) {
+          const r = this._state.riders[Math.floor(Math.random() * this._state.riders.length)];
+          r.connection = r.connection === "live" ? "stale" : "live";
+        }
+
+        emit("riderUpdate", this._state);
+      }, 1500);
+    },
+
+    subscribe,
+  };
+
+  global.RidersLive = global.RidersLive || {};
+  global.RidersLive.bridge = hasNativeBridge ? NativeBridge : SimulatedBridge;
+  global.RidersLive.isSimulated = !hasNativeBridge;
+})(window);
+
+
+// ---- js/ride.js ----
+/**
+ * ride.js — thin state layer above RidersLive.bridge. Screens read from
+ * RidersLive.ride rather than calling the bridge directly, so app.js
+ * doesn't need to know whether it's talking to native Android or the
+ * in-browser simulation.
+ */
+(function (global) {
+  const bridge = global.RidersLive.bridge;
+
+  const ride = {
+    rideId: null,
+    code: null,
+    myRiderId: null,
+    role: null, // 'PRIMARY' | 'RIDER'
+    state: "NONE", // mirrors RideState in ride_manager.py/RideManager.kt
+    destination: null,
+
+    createAsPrimary(displayName) {
+      const result = bridge.createRide(displayName);
+      this.rideId = result.rideId;
+      this.code = result.code;
+      this.myRiderId = result.riderId;
+      this.role = "PRIMARY";
+      this.state = "CREATED";
+      return result;
+    },
+
+    start() {
+      bridge.startRide();
+    },
+
+    end() {
+      bridge.endRide();
+      this.rideId = null;
+      this.code = null;
+      this.role = null;
+      this.state = "NONE";
+      this.destination = null;
+    },
+
+    setDestination(lat, lon, name) {
+      if (this.role !== "PRIMARY") {
+        global.RidersLive.toast("Only the primary rider can set the destination");
+        return;
+      }
+      bridge.setDestination(this.myRiderId, lat, lon, name);
+    },
+
+    removeParticipant(targetRiderId) {
+      if (this.role !== "PRIMARY") {
+        global.RidersLive.toast("Only the primary rider can remove a participant");
+        return;
+      }
+      bridge.removeParticipant(this.myRiderId, targetRiderId);
+    },
+  };
+
+  bridge.subscribe("rideStateChanged", (detail) => {
+    ride.state = detail.state;
+  });
+  bridge.subscribe("destinationChanged", (detail) => {
+    ride.destination = detail;
+  });
+  bridge.subscribe("error", (detail) => {
+    global.RidersLive.toast(detail.message, "warning");
+  });
+
+  global.RidersLive.ride = ride;
+})(window);
+
+
+// ---- js/riders.js ----
+/**
+ * riders.js — geo math ported from python/distance.py + python/eta.py
+ * (kept behaviorally identical to the reference implementation, see
+ * python/tests/ for the spec this must match), plus rendering for the
+ * rider list / group dashboard and the waiting-room chip row.
+ */
+(function (global) {
+  const EARTH_RADIUS_KM = 6371.0088;
+
+  function haversineKm(lat1, lon1, lat2, lon2) {
+    const toRad = (d) => (d * Math.PI) / 180;
+    const phi1 = toRad(lat1), phi2 = toRad(lat2);
+    const dphi = toRad(lat2 - lat1);
+    const dlambda = toRad(lon2 - lon1);
+    const a = Math.sin(dphi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dlambda / 2) ** 2;
+    return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
+  }
+
+  const MIN_MOVING_SPEED_MPS = 0.6;
+  const DEFAULT_FALLBACK_SPEED_KMH = 25.0;
+
+  /** Mirrors eta.estimate_eta_minutes. Straight-line distance is used
+   * here because the browser demo has no offline routing graph loaded;
+   * on-device, distance_km should come from distance.distance_between()
+   * with a real OfflineRoutingProvider when available, per §15. */
+  function estimateEtaMinutes(distanceKm, currentSpeedMps) {
+    if (distanceKm <= 0) return { minutes: 0, basedOn: "current_speed" };
+    if (currentSpeedMps != null && currentSpeedMps >= MIN_MOVING_SPEED_MPS) {
+      const speedKmh = currentSpeedMps * 3.6;
+      return { minutes: (distanceKm / speedKmh) * 60, basedOn: "current_speed" };
+    }
+    if (currentSpeedMps != null && currentSpeedMps < MIN_MOVING_SPEED_MPS) {
+      return { minutes: null, basedOn: "stationary" };
+    }
+    return { minutes: (distanceKm / DEFAULT_FALLBACK_SPEED_KMH) * 60, basedOn: "fallback_default" };
+  }
+
+  function etaLabel(est) {
+    if (est.minutes == null) return "ETA unavailable";
+    return `ETA ~${Math.round(est.minutes)} min (estimate)`;
+  }
+
+  function connectionLabel(rider) {
+    const secondsAgo = Math.round((Date.now() - rider.lastUpdate) / 1000);
+    if (rider.connection === "lost" || secondsAgo > 18) return { text: `⚠ Last seen ${secondsAgo}s ago`, state: "lost" };
+    if (rider.connection === "stale" || secondsAgo > 6) return { text: `● Relay — ${secondsAgo}s ago`, state: "stale" };
+    return { text: `● Live — ${secondsAgo}s ago`, state: "live" };
+  }
+
+  function initialsFor(name) {
+    return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+  }
+
+  function renderRiderList(containerEl, meAndRiders, destination) {
+    containerEl.innerHTML = "";
+    meAndRiders.forEach((rider) => {
+      const item = document.createElement("div");
+      item.className = "rider-panel-item";
+
+      const avatar = document.createElement("div");
+      avatar.className = "rider-avatar";
+      avatar.style.background = rider.isSelf ? "var(--teal)" : rider.color || "var(--amber)";
+      avatar.textContent = initialsFor(rider.displayName);
+      item.appendChild(avatar);
+
+      const info = document.createElement("div");
+      info.className = "rider-info";
+      const nameRow = document.createElement("div");
+      nameRow.className = "rider-name-row";
+      const liveDot = document.createElement("span");
+      const conn = connectionLabel(rider);
+      liveDot.className = "live-dot";
+      liveDot.dataset.live = conn.state;
+      nameRow.appendChild(liveDot);
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = rider.displayName + (rider.isSelf ? " (you)" : "");
+      nameRow.appendChild(nameSpan);
+      info.appendChild(nameRow);
+
+      const meta = document.createElement("div");
+      meta.className = "rider-meta";
+      meta.textContent = conn.text + (rider.hopCount ? ` · via relay (${rider.hopCount} hop${rider.hopCount > 1 ? "s" : ""})` : "");
+      info.appendChild(meta);
+      item.appendChild(info);
+
+      const metrics = document.createElement("div");
+      metrics.className = "rider-metrics";
+      if (destination && !rider.isSelf) {
+        const distKm = haversineKm(rider.lat, rider.lon, destination.lat, destination.lon);
+        const dist = document.createElement("div");
+        dist.className = "dist";
+        dist.textContent = `${distKm.toFixed(1)} km`;
+        metrics.appendChild(dist);
+        const eta = document.createElement("div");
+        eta.className = "eta";
+        eta.textContent = etaLabel(estimateEtaMinutes(distKm, rider.speedMps));
+        metrics.appendChild(eta);
+      } else if (destination && rider.isSelf) {
+        const distKm = haversineKm(rider.lat, rider.lon, destination.lat, destination.lon);
+        const dist = document.createElement("div");
+        dist.className = "dist";
+        dist.textContent = `${distKm.toFixed(1)} km`;
+        metrics.appendChild(dist);
+        metrics.appendChild(Object.assign(document.createElement("div"), { className: "eta", textContent: "to destination" }));
+      }
+      item.appendChild(metrics);
+
+      if (global.RidersLive.ride.role === "PRIMARY" && !rider.isSelf) {
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "rider-remove-btn";
+        removeBtn.textContent = "Remove";
+        removeBtn.onclick = () => global.RidersLive.ride.removeParticipant(rider.riderId);
+        item.appendChild(removeBtn);
+      }
+
+      containerEl.appendChild(item);
+    });
+  }
+
+  function renderWaitingChips(containerEl, riders) {
+    containerEl.innerHTML = "";
+    riders.forEach((r) => {
+      const chip = document.createElement("div");
+      chip.className = "rider-chip";
+      const swatch = document.createElement("span");
+      swatch.className = "swatch";
+      swatch.style.background = r.color || "var(--teal)";
+      chip.appendChild(swatch);
+      chip.appendChild(document.createTextNode(r.displayName));
+      containerEl.appendChild(chip);
+    });
+  }
+
+  global.RidersLive = global.RidersLive || {};
+  global.RidersLive.geo = { haversineKm, estimateEtaMinutes, etaLabel };
+  global.RidersLive.renderRiderList = renderRiderList;
+  global.RidersLive.renderWaitingChips = renderWaitingChips;
+})(window);
+
+
+// ---- js/map.js ----
+/**
+ * map.js — a small, fully self-contained canvas renderer for rider
+ * positions and the destination.
+ *
+ * Why not a real tile-based map here: a genuinely offline map needs
+ * pre-downloaded vector/raster tiles, which only exist on-device (see
+ * maps/offline/ and the MapLibre GL dependency in the Android build —
+ * mobile/android/app/build.gradle.kts). This browser demo has no such
+ * tile package to load, and fetching tiles from the internet would
+ * misrepresent an "offline-first" app by silently depending on a
+ * network connection. Instead this draws a simple grid + rider/
+ * destination markers, auto-fit to whatever positions are live right
+ * now — enough to validate the interaction design without pretending
+ * to be a real basemap. Swap this module's `render()` body for a
+ * MapLibre GL JS instance (still fully offline, reading local MBTiles)
+ * to get real cartography in an on-device WebView build.
+ */
+(function (global) {
+  let canvas, ctx;
+
+  function init(canvasEl) {
+    canvas = canvasEl;
+    ctx = canvas.getContext("2d");
+    const resize = () => {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * devicePixelRatio;
+      canvas.height = rect.height * devicePixelRatio;
+      canvas.style.width = rect.width + "px";
+      canvas.style.height = rect.height + "px";
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    };
+    resize();
+    window.addEventListener("resize", resize);
+  }
+
+  function computeBounds(points) {
+    const pad = 0.006;
+    let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+    points.forEach((p) => {
+      minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
+      minLon = Math.min(minLon, p.lon); maxLon = Math.max(maxLon, p.lon);
+    });
+    if (!isFinite(minLat)) return { minLat: 0, maxLat: 1, minLon: 0, maxLon: 1 };
+    return { minLat: minLat - pad, maxLat: maxLat + pad, minLon: minLon - pad, maxLon: maxLon + pad };
+  }
+
+  function project(lat, lon, bounds, w, h) {
+    const x = ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon || 1)) * w;
+    const y = h - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat || 1)) * h;
+    return [x, y];
+  }
+
+  function render(state) {
+    if (!ctx) return;
+    const w = canvas.width / devicePixelRatio, h = canvas.height / devicePixelRatio;
+    ctx.clearRect(0, 0, w, h);
+
+    // background
+    ctx.fillStyle = "#0A100D";
+    ctx.fillRect(0, 0, w, h);
+
+    if (!state || !state.me) {
+      ctx.fillStyle = "#5A6B64";
+      ctx.font = "13px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("No active ride", w / 2, h / 2);
+      return;
+    }
+
+    const points = [state.me, ...state.riders];
+    if (state.destination) points.push(state.destination);
+    const bounds = computeBounds(points);
+
+    // faint grid, stands in for a real basemap's graticule
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 8; i++) {
+      const gx = (w / 8) * i, gy = (h / 8) * i;
+      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+    }
+
+    // destination
+    if (state.destination) {
+      const [dx, dy] = project(state.destination.lat, state.destination.lon, bounds, w, h);
+      ctx.font = "20px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("🏁", dx, dy);
+    }
+
+    // riders
+    state.riders.forEach((r) => {
+      const [x, y] = project(r.lat, r.lon, bounds, w, h);
+      drawRiderMarker(x, y, r.color || "#E8A23D", r.displayName, r.connection);
+    });
+
+    // self, drawn last so it's always on top
+    const [mx, my] = project(state.me.lat, state.me.lon, bounds, w, h);
+    drawRiderMarker(mx, my, "#2BA79A", "You", "live", true);
+  }
+
+  function drawRiderMarker(x, y, color, label, connection, isSelf) {
+    ctx.beginPath();
+    ctx.arc(x, y, isSelf ? 8 : 6, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = connection === "lost" ? 0.35 : 1;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    if (isSelf) {
+      ctx.strokeStyle = "#F4F6F2";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#F4F6F2";
+    ctx.font = "11px -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(label, x, y - 12);
+  }
+
+  // -----------------------------------------------------------------------
+  // QR mockup: a deterministic module-grid preview, NOT a scannable ISO/IEC
+  // 18004 QR code. Generating a truly scannable code needs a real QR
+  // encoder (on Android, e.g. ZXing) — this canvas only previews what
+  // information the QR payload would carry, and is labeled as such in the
+  // UI. Swap this for a real QR library call in production.
+  // -----------------------------------------------------------------------
+  function renderQrMockup(canvasEl, payloadText) {
+    const ctx2 = canvasEl.getContext("2d");
+    const size = canvasEl.width;
+    const cells = 21;
+    const cellSize = size / cells;
+    ctx2.fillStyle = "#fff";
+    ctx2.fillRect(0, 0, size, size);
+    ctx2.fillStyle = "#0E1512";
+
+    // deterministic pseudo-random module pattern seeded from the payload,
+    // just so the same code always renders the same-looking pattern.
+    let seed = 0;
+    for (let i = 0; i < payloadText.length; i++) seed = (seed * 31 + payloadText.charCodeAt(i)) >>> 0;
+    function next() { seed = (seed * 1103515245 + 12345) >>> 0; return (seed >>> 16) % 100; }
+
+    for (let row = 0; row < cells; row++) {
+      for (let col = 0; col < cells; col++) {
+        const inFinder = (r, c) => (r < 7 && c < 7) || (r < 7 && c >= cells - 7) || (r >= cells - 7 && c < 7);
+        if (inFinder(row, col)) continue;
+        if (next() < 45) ctx2.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+      }
+    }
+    // finder squares (the three corner markers real QR codes use)
+    [[0, 0], [0, cells - 7], [cells - 7, 0]].forEach(([r, c]) => {
+      ctx2.fillRect(c * cellSize, r * cellSize, cellSize * 7, cellSize * 7);
+      ctx2.fillStyle = "#fff";
+      ctx2.fillRect((c + 1) * cellSize, (r + 1) * cellSize, cellSize * 5, cellSize * 5);
+      ctx2.fillStyle = "#0E1512";
+      ctx2.fillRect((c + 2) * cellSize, (r + 2) * cellSize, cellSize * 3, cellSize * 3);
+    });
+  }
+
+  global.RidersLive = global.RidersLive || {};
+  global.RidersLive.map = { init, render };
+  global.RidersLive.renderQrMockup = renderQrMockup;
+})(window);
+
+
+// ---- js/security-ui.js ----
+/**
+ * security-ui.js — wires the Settings screen's toggles to a small local
+ * settings store. On-device, this same shape of object is persisted in
+ * the `settings` table (database/schema.sql) via an encrypted-storage
+ * bridge call; the browser demo keeps it in localStorage purely for a
+ * persistent-feeling demo across reloads.
+ *
+ * Per master prompt §51: settings shown as permanently-on/disabled here
+ * (require device authentication, rotate session keys) are NOT fake
+ * controls — they reflect protections this app applies unconditionally,
+ * shown so the person knows they're active rather than hidden.
+ */
+(function (global) {
+  const STORAGE_KEY = "riders_live_settings_v1";
+
+  const defaults = {
+    locationSharing: true,
+    saveLocationHistory: false,
+    shareSpeed: true,
+    shareHeading: true,
+    autoDeleteRideData: true,
+    displayAlias: "Rider",
+    autoExpireRide: true,
+    hideRiderIdentity: true,
+    requireJoinConfirmation: true,
+  };
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? { ...defaults, ...JSON.parse(raw) } : { ...defaults };
+    } catch (e) {
+      return { ...defaults };
+    }
+  }
+
+  function save(settings) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    } catch (e) {
+      /* storage may be unavailable (e.g. private browsing) — settings
+         simply won't persist across reloads in that case. */
+    }
+  }
+
+  let current = load();
+
+  function bindToggle(elId, key) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.checked = !!current[key];
+    el.addEventListener("change", () => {
+      current[key] = el.checked;
+      save(current);
+    });
+  }
+
+  function bindText(elId, key) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.value = current[key];
+    el.addEventListener("change", () => {
+      current[key] = el.value;
+      save(current);
+    });
+  }
+
+  function initSettingsScreen() {
+    bindToggle("pref-location-sharing", "locationSharing");
+    bindToggle("pref-save-history", "saveLocationHistory");
+    bindToggle("pref-share-speed", "shareSpeed");
+    bindToggle("pref-share-heading", "shareHeading");
+    bindToggle("pref-auto-delete", "autoDeleteRideData");
+    bindToggle("pref-auto-expire", "autoExpireRide");
+    bindToggle("pref-hide-identity", "hideRiderIdentity");
+    bindToggle("pref-confirm-join", "requireJoinConfirmation");
+    bindText("pref-alias", "displayAlias");
+
+    const clearBtn = document.getElementById("btn-clear-data");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        if (confirm("Delete all local ride data on this device? This cannot be undone.")) {
+          // On-device this calls into the bridge to wipe schema.sql tables
+          // and any EncryptedSharedPreferences-held keys; here we only
+          // clear the demo settings store to keep the concept honest.
+          try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* storage unavailable */ }
+          current = { ...defaults };
+          global.RidersLive.toast("Local ride data deleted");
+          initSettingsScreen();
+        }
+      });
+    }
+  }
+
+  global.RidersLive = global.RidersLive || {};
+  global.RidersLive.settings = { get: () => current, initSettingsScreen };
+})(window);
+
+
+// ---- js/app.js ----
+/**
+ * app.js — navigation and top-level wiring. Reads/writes only through
+ * RidersLive.ride / RidersLive.bridge / RidersLive.settings; contains no
+ * Bluetooth/GPS/crypto logic of its own.
+ */
+(function (global) {
+  const RL = global.RidersLive;
+
+  // -- navigation -----------------------------------------------------
+  function showScreen(name) {
+    document.querySelectorAll(".screen").forEach((el) => {
+      el.dataset.active = el.id === `screen-${name}` ? "true" : "false";
+    });
+    document.querySelectorAll(".nav-item").forEach((el) => {
+      el.dataset.active = el.dataset.nav === name ? "true" : "false";
+    });
+  }
+
+  document.querySelectorAll("[data-nav]").forEach((el) => {
+    el.addEventListener("click", () => showScreen(el.dataset.nav));
+  });
+
+  // -- toasts -----------------------------------------------------------
+  RL.toast = function (message, kind = "info") {
+    const container = document.getElementById("toast-container");
+    const el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = message;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
+  };
+
+  // -- permission banner --------------------------------------------------
+  function refreshPermissionBanner() {
+    const banner = document.getElementById("permission-banner");
+    const text = document.getElementById("permission-banner-text");
+    if (RL.bridge.hasPermissions()) {
+      banner.classList.add("hidden");
+      return;
+    }
+    text.textContent = "Location and Bluetooth access are needed to find nearby riders and share your position.";
+    banner.classList.remove("hidden");
+  }
+  document.getElementById("btn-grant-permissions").addEventListener("click", () => {
+    RL.bridge.requestPermissions();
+  });
+
+  // -- status bar ---------------------------------------------------------
+  function setDot(id, state) {
+    const el = document.querySelector(`#${id} .dot`);
+    if (el) el.dataset.state = state;
+  }
+
+  function updateStatusBar(rideState) {
+    const active = rideState && rideState.state === "ACTIVE";
+    setDot("status-bluetooth", active ? "connected" : "off");
+    setDot("status-gps", active ? "accurate" : "off");
+    document.querySelector("#status-network .label").textContent = "Offline";
+    setDot("status-network", "warn"); // this app is ALWAYS in offline mode by design
+    const riders = rideState ? [rideState.me, ...rideState.riders] : [];
+    document.getElementById("rider-count-label").textContent = `${riders.length} rider${riders.length === 1 ? "" : "s"}`;
+  }
+
+  // -- home: create / join ------------------------------------------------
+  document.getElementById("btn-create-ride").addEventListener("click", () => {
+    if (!RL.bridge.hasPermissions()) { refreshPermissionBanner(); return; }
+    const alias = RL.settings.get().displayAlias || "Rider";
+    RL.ride.createAsPrimary(alias);
+    document.getElementById("ride-code-display").textContent = RL.ride.code;
+    showScreen("ride-code");
+  });
+
+  document.getElementById("btn-join-ride").addEventListener("click", () => showScreen("join"));
+
+  document.getElementById("btn-confirm-join").addEventListener("click", () => {
+    const code = document.getElementById("join-code-input").value.trim();
+    const name = document.getElementById("join-name-input").value.trim() || "Rider";
+    if (code.length !== 6) { RL.toast("Enter the 6-digit ride code"); return; }
+    if (RL.isSimulated) {
+      RL.toast("Demo mode: joining shows the same simulated group as Create Ride");
+      RL.ride.createAsPrimary(name); // demo convenience: reuse the same simulated state
+      RL.ride.role = "RIDER";
+      showScreen("map");
+    } else {
+      RL.toast("Searching for the ride over Bluetooth…");
+      // Real joining happens asynchronously over BLE (BleMeshManager +
+      // HandshakeManager); a production build would show a spinner here
+      // and transition screens once 'rideStateChanged' fires.
+    }
+  });
+
+  // -- ride code / waiting room --------------------------------------------
+  document.getElementById("btn-copy-code").addEventListener("click", () => {
+    navigator.clipboard?.writeText(RL.ride.code || "");
+    RL.toast("Ride code copied");
+  });
+  document.getElementById("btn-show-qr").addEventListener("click", () => {
+    const wrap = document.getElementById("qr-canvas-wrap");
+    wrap.classList.toggle("hidden");
+    if (!wrap.classList.contains("hidden")) {
+      const payload = JSON.stringify({ code: RL.ride.code, rideId: RL.ride.rideId });
+      RL.renderQrMockup(document.getElementById("qr-canvas"), payload);
+    }
+  });
+  document.getElementById("btn-start-ride").addEventListener("click", () => {
+    RL.ride.start();
+    showScreen("map");
+  });
+
+  // -- ride controls --------------------------------------------------------
+  document.getElementById("btn-set-destination").addEventListener("click", () => {
+    const lat = document.getElementById("destination-lat-input").value;
+    const lon = document.getElementById("destination-lon-input").value;
+    const name = document.getElementById("destination-name-input").value;
+    if (!lat || !lon) { RL.toast("Enter a latitude and longitude"); return; }
+    RL.ride.setDestination(lat, lon, name);
+    RL.toast("Destination updated for all riders");
+  });
+  document.getElementById("btn-end-ride").addEventListener("click", () => {
+    if (confirm("End the ride for everyone and stop sharing?")) {
+      RL.ride.end();
+      showScreen("home");
+    }
+  });
+
+  // -- react to ride/bridge events --------------------------------------------
+  RL.bridge.subscribe("destinationChanged", (detail) => {
+    document.getElementById("destination-name").textContent = detail.name || "Destination set";
+  });
+
+  RL.bridge.subscribe("rideStateChanged", () => updateStatusBar(RL.bridge.getState ? RL.bridge.getState() : null));
+
+  if (RL.isSimulated) {
+    RL.bridge.subscribe("riderUpdate", (state) => {
+      updateStatusBar(state);
+      RL.renderWaitingChips(document.getElementById("waiting-room-list"), state.riders);
+
+      const allForList = [state.me, ...state.riders];
+      RL.renderRiderList(document.getElementById("riders-list"), allForList, state.destination);
+
+      if (state.destination) {
+        const distKm = RL.geo.haversineKm(state.me.lat, state.me.lon, state.destination.lat, state.destination.lon);
+        document.getElementById("destination-name").textContent = state.destination.name || "Destination";
+        document.getElementById("destination-distance").textContent =
+          `${distKm.toFixed(1)} km · ${RL.geo.etaLabel(RL.geo.estimateEtaMinutes(distKm, state.me.speedMps))}`;
+      }
+
+      RL.map.render(state);
+    });
+  }
+
+  // -- init ------------------------------------------------------------------
+  RL.map.init(document.getElementById("map-canvas"));
+  RL.settings.initSettingsScreen();
+  refreshPermissionBanner();
+  updateStatusBar(null);
+  showScreen("home");
+})(window);
+
+
+</script>
+</body>
+</html>
